@@ -1,0 +1,4 @@
+__pycache__/
+calculos.db
+.vercel/
+.env*

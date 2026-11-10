@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Calculadora de Taxas · DRM CELL</title>
+<style>
+  :root { --bg:#f3f4f8; --card:#fff; --txt:#1f2430; --mut:#6b7280; --pri:#4f46e5; --ok:#059669; --bd:#e5e7eb; --err:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12141b; --card:#1b1e28; --txt:#e8eaf0; --mut:#9aa1b2; --pri:#818cf8; --ok:#34d399; --bd:#2a2e3b; --err:#f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:16px system-ui,sans-serif; padding:24px 16px; }
+  .card { max-width:480px; margin:0 auto; background:var(--card); border:1px solid var(--bd); border-radius:16px; padding:24px; }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  p.sub { margin:0 0 20px; color:var(--mut); font-size:.9rem; }
+  label { display:block; font-size:.85rem; color:var(--mut); margin:14px 0 6px; }
+  input, select { width:100%; padding:12px; font-size:1rem; border:1px solid var(--bd); border-radius:10px; background:var(--bg); color:var(--txt); }
+  .fixa { display:flex; justify-content:space-between; margin-top:14px; padding:12px; border-radius:10px; background:var(--bg); font-size:.9rem; }
+  button { width:100%; margin-top:20px; padding:14px; font-size:1rem; font-weight:600; border:0; border-radius:10px; background:var(--pri); color:#fff; cursor:pointer; }
+  button.sec { background:transparent; color:var(--mut); border:1px solid var(--bd); margin-top:12px; padding:10px; font-weight:500; }
+  #erro { color:var(--err); font-size:.9rem; margin-top:12px; min-height:1.2em; }
+  #app { display:none; }
+  #res { margin-top:20px; display:none; }
+  .linha { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--bd); font-size:.95rem; }
+  .total { display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding:16px; border-radius:12px; background:var(--bg); }
+  .total strong { font-size:1.6rem; color:var(--ok); }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- LOGIN -->
+  <form id="login" onsubmit="entrar(event)">
+    <h1>Área do dono · DRM CELL</h1>
+    <p class="sub">Acesso restrito. Entre com seu email e senha.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <div id="erro"></div>
+  </form>
+
+  <!-- CALCULADORA -->
+  <div id="app">
+    <h1>Calculadora de Taxas de Reparos</h1>
+    <p class="sub">Preço final já considerando a taxa do cartão.</p>
+
+    <label for="modelo">Modelo</label>
+    <input id="modelo" placeholder="Ex.: iPhone 13">
+
+    <label for="qualidade">Qualidade de tela</label>
+    <select id="qualidade">
+      <option>Original</option><option>OLED</option><option>Incell</option>
+      <option>Premium</option><option>Nacional</option>
+    </select>
+
+    <label for="custo">Valor de custo (R$)</label>
+    <input id="custo" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00">
+
+    <label for="motoboy">Taxa do motoboy (R$)</label>
+    <input id="motoboy" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00">
+
+    <label for="mao">Valor da mão de obra (R$)</label>
+    <input id="mao" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00">
+
+    <div class="fixa"><span>Taxa da máquina de cartão (fixa)</span><strong>13,92%</strong></div>
+
+    <button onclick="calcular()">Calcular</button>
+
+    <div id="res">
+      <div class="linha"><span id="titulo"></span><span></span></div>
+      <div class="linha"><span>Custo</span><span id="r_custo"></span></div>
+      <div class="linha"><span>Motoboy</span><span id="r_moto"></span></div>
+      <div class="linha"><span>Mão de obra</span><span id="r_mao"></span></div>
+      <div class="linha"><span>Taxa do cartão (13,92%)</span><span id="r_taxa"></span></div>
+      <div class="total"><span>Preço final</span><strong id="r_final"></strong></div>
+    </div>
+    <button class="sec" onclick="sair()">Sair</button>
+  </div>
+</div>
+
+<script>
+const brl = v => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const $ = id => document.getElementById(id);
+let token = null;
+try { token = sessionStorage.getItem('drm_token'); } catch (e) {}
+
+function mostrar() {
+  $('login').style.display = token ? 'none' : 'block';
+  $('app').style.display = token ? 'block' : 'none';
+}
+async function entrar(ev) {
+  ev.preventDefault();
+  $('erro').textContent = '';
+  try {
+    const r = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email: $('email').value, senha: $('senha').value})});
+    const d = await r.json();
+    if (!r.ok) { $('erro').textContent = d.erro || 'Não foi possível entrar.'; return; }
+    token = d.token;
+    try { sessionStorage.setItem('drm_token', token); } catch (e) {}
+    $('senha').value = '';
+    mostrar();
+  } catch (e) { $('erro').textContent = 'Erro de conexão. Tente de novo.'; }
+}
+function sair() {
+  token = null;
+  try { sessionStorage.removeItem('drm_token'); } catch (e) {}
+  $('res').style.display = 'none';
+  mostrar();
+}
+async function calcular() {
+  const body = {
+    custo: parseFloat($('custo').value) || 0,
+    motoboy: parseFloat($('motoboy').value) || 0,
+    mao_de_obra: parseFloat($('mao').value) || 0,
+    modelo: $('modelo').value,
+    qualidade: $('qualidade').value,
+  };
+  const r = await fetch('/api/calcular', {method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + token},
+    body: JSON.stringify(body)});
+  if (r.status === 401) { sair(); $('erro').textContent = 'Sessão expirada. Entre novamente.'; return; }
+  const d = await r.json();
+  $('titulo').textContent = ($('modelo').value || 'Sem modelo') + ' — tela ' + $('qualidade').value;
+  $('r_custo').textContent = brl(d.custo);
+  $('r_moto').textContent = brl(d.motoboy);
+  $('r_mao').textContent = brl(d.mao_de_obra);
+  $('r_taxa').textContent = brl(d.taxa_cartao_valor);
+  $('r_final').textContent = brl(d.preco_final);
+  $('res').style.display = 'block';
+}
+mostrar();
+</script>
+</body>
+</html>
