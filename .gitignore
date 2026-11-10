@@ -1,4 +1,7 @@
 __pycache__/
 calculos.db
+*.db
+*.sql
 .vercel/
 .env*
+backups/

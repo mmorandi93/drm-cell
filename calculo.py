@@ -81,6 +81,9 @@ def listar(limite=5000):
         con = psycopg2.connect(DATABASE_URL)
         try:
             with con, con.cursor() as cur:
+                cur.execute("SELECT to_regclass('public.calculos')")
+                if cur.fetchone()[0] is None:  # tabela ainda não existe
+                    return []
                 cur.execute(sql)
                 linhas = cur.fetchall()
         finally:
@@ -90,7 +93,10 @@ def listar(limite=5000):
             return []
         con = sqlite3.connect(SQLITE_PATH)
         try:
-            linhas = con.execute(sql).fetchall()
+            try:
+                linhas = con.execute(sql).fetchall()
+            except sqlite3.OperationalError:   # tabela ainda não existe (nenhum cálculo feito)
+                linhas = []
         finally:
             con.close()
     saida = []
@@ -103,11 +109,21 @@ def listar(limite=5000):
     return saida
 
 
+QUALIDADES = ("Original", "OLED", "Incell", "Premium", "Nacional")
+
+
 def processar(dados):
-    r = calcular(float(dados.get("custo", 0)), float(dados.get("motoboy", 0)),
-                 float(dados.get("mao_de_obra", 0)))
+    """Valida a entrada (nunca confie no navegador), calcula e registra."""
+    from seguranca import numero, texto
+    r = calcular(numero(dados.get("custo"), "custo"),
+                 numero(dados.get("motoboy"), "motoboy"),
+                 numero(dados.get("mao_de_obra"), "mao_de_obra"))
+    modelo = texto(dados.get("modelo"), 100)
+    qualidade = texto(dados.get("qualidade"), 30)
+    if qualidade and qualidade not in QUALIDADES:
+        raise ValueError("qualidade")
     try:
-        salvar(str(dados.get("modelo", ""))[:200], str(dados.get("qualidade", ""))[:100], r)
+        salvar(modelo, qualidade, r)
     except Exception as e:  # o cálculo não deve falhar se o banco falhar
-        print("Erro ao salvar no banco:", e)
+        print("Erro ao salvar no banco:", type(e).__name__)  # sem detalhes (podem conter credenciais)
     return r
