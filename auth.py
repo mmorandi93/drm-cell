@@ -44,17 +44,13 @@ def login(email, senha):
     if f:
         return None, "Login não configurado no servidor. Faltam variáveis: " + ", ".join(f)
     if email.strip().lower() != OWNER_EMAIL:
-        return None, "[DIAGNÓSTICO] Este email não é igual ao OWNER_EMAIL da Vercel."
+        return None, "Email ou senha incorretos."
     try:
         r = _chamar("/auth/v1/token?grant_type=password",
                     {"email": email.strip(), "password": senha})
     except urllib.error.HTTPError as e:
         if e.code == 400:
-            try:
-                msg = json.loads(e.read()).get("msg") or json.loads("{}")
-            except Exception:
-                msg = ""
-            return None, "[DIAGNÓSTICO] O Supabase recusou: %s" % (msg or "credenciais inválidas")
+            return None, "Email ou senha incorretos."
         return None, "Erro no Supabase (código %s). Confira SUPABASE_URL e SUPABASE_ANON_KEY." % e.code
     except (urllib.error.URLError, ValueError):
         return None, "Não foi possível falar com o Supabase. Confira SUPABASE_URL."
