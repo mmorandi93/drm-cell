@@ -21,7 +21,22 @@
   button { width:100%; margin-top:20px; padding:14px; font-size:1rem; font-weight:600; border:0; border-radius:10px; background:var(--pri); color:#fff; cursor:pointer; }
   button.sec { background:transparent; color:var(--mut); border:1px solid var(--bd); margin-top:12px; padding:10px; font-weight:500; }
   #erro { color:var(--err); font-size:.9rem; margin-top:12px; min-height:1.2em; }
-  #app { display:none; }
+  #app, #menu, #lista { display:none; }
+  .card.larga { max-width:1000px; }
+  .opcao { display:block; text-align:left; padding:18px; margin-top:14px; }
+  .opcao small { display:block; font-weight:400; opacity:.85; margin-top:4px; }
+  .barra { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .barra input { flex:1 1 200px; width:auto; }
+  .barra select { width:auto; }
+  .barra button { width:auto; margin:0; padding:10px 14px; }
+  .resumo { color:var(--mut); font-size:.85rem; margin:10px 0 6px; }
+  .wrap { overflow:auto; max-height:65vh; border:1px solid var(--bd); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; min-width:720px; font-size:.9rem; }
+  th, td { padding:8px 10px; border:1px solid var(--bd); white-space:nowrap; }
+  th { position:sticky; top:0; background:var(--bg); cursor:pointer; text-align:left; user-select:none; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  td.f { font-weight:700; color:var(--ok); }
+  tbody tr.sel { background:color-mix(in srgb, var(--pri) 22%, transparent); }
   #res { margin-top:20px; display:none; }
   .linha { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--bd); font-size:.95rem; }
   .total { display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding:16px; border-radius:12px; background:var(--bg); }
@@ -42,6 +57,30 @@
     <button type="submit">Entrar</button>
     <div id="erro"></div>
   </form>
+
+  <!-- MENU -->
+  <div id="menu">
+    <h1>Área do dono · DRM CELL</h1>
+    <p class="sub">O que você quer abrir?</p>
+    <button class="opcao" onclick="ir('calc')">Abrir calculadora<small>Calcular o preço final de um reparo</small></button>
+    <button class="opcao" onclick="ir('lista')">Abrir lista de valores<small>Tabela com todos os cálculos já feitos</small></button>
+    <button class="sec" onclick="sair()">Sair</button>
+  </div>
+
+  <!-- LISTA DE VALORES -->
+  <div id="lista">
+    <h1>Lista de valores</h1>
+    <p class="sub">Todas as trocas de tela calculadas. Clique no título de uma coluna para ordenar.</p>
+    <div class="barra">
+      <input id="q" type="search" placeholder="Pesquisar modelo, qualidade, valor…">
+      <select id="fq"><option value="">Todas as qualidades</option></select>
+      <button onclick="exportarCsv()">Exportar CSV</button>
+      <button onclick="carregarLista()">Atualizar</button>
+    </div>
+    <div class="resumo" id="resumo"></div>
+    <div class="wrap"><table><thead><tr id="cab"></tr></thead><tbody id="corpo"></tbody></table></div>
+    <button class="sec" onclick="ir('menu')">← Voltar ao menu</button>
+  </div>
 
   <!-- CALCULADORA -->
   <div id="app">
@@ -78,7 +117,7 @@
       <div class="linha"><span>Taxa do cartão (13,92%)</span><span id="r_taxa"></span></div>
       <div class="total"><span>Preço final</span><strong id="r_final"></strong></div>
     </div>
-    <button class="sec" onclick="sair()">Sair</button>
+    <button class="sec" onclick="ir('menu')">← Voltar ao menu</button>
   </div>
 </div>
 
@@ -88,9 +127,14 @@ const $ = id => document.getElementById(id);
 let token = null;
 try { token = sessionStorage.getItem('drm_token'); } catch (e) {}
 
+let tela = 'menu';
+function ir(t) { tela = t; mostrar(); if (t === 'lista') carregarLista(); }
 function mostrar() {
   $('login').style.display = token ? 'none' : 'block';
-  $('app').style.display = token ? 'block' : 'none';
+  $('menu').style.display = token && tela === 'menu' ? 'block' : 'none';
+  $('app').style.display = token && tela === 'calc' ? 'block' : 'none';
+  $('lista').style.display = token && tela === 'lista' ? 'block' : 'none';
+  document.querySelector('.card').classList.toggle('larga', tela === 'lista');
 }
 async function entrar(ev) {
   ev.preventDefault();
@@ -103,11 +147,13 @@ async function entrar(ev) {
     token = d.token;
     try { sessionStorage.setItem('drm_token', token); } catch (e) {}
     $('senha').value = '';
+    tela = 'menu';
     mostrar();
   } catch (e) { $('erro').textContent = 'Erro de conexão. Tente de novo.'; }
 }
 function sair() {
   token = null;
+  tela = 'menu';
   try { sessionStorage.removeItem('drm_token'); } catch (e) {}
   $('res').style.display = 'none';
   mostrar();
@@ -133,6 +179,66 @@ async function calcular() {
   $('r_final').textContent = brl(d.preco_final);
   $('res').style.display = 'block';
 }
+
+/* ---- Lista de valores (estilo planilha) ---- */
+const COLS = [
+  {k:'criado_em', t:'Data', f:v => { const d = new Date(v.replace(' ','T') + (/[zZ+]/.test(v.slice(10)) ? '' : 'Z')); return isNaN(d) ? v : d.toLocaleString('pt-BR'); }},
+  {k:'modelo', t:'Modelo'},
+  {k:'qualidade', t:'Qualidade de tela'},
+  {k:'custo', t:'Custo', n:1},
+  {k:'motoboy', t:'Motoboy', n:1},
+  {k:'mao_de_obra', t:'Mão de obra', n:1},
+  {k:'taxa_cartao_valor', t:'Taxa cartão', n:1},
+  {k:'preco_final', t:'Preço final', n:1, fin:1},
+];
+let dados = [], ordem = {k:'criado_em', dir:-1};
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const celula = (c, d) => c.n ? brl(d[c.k]) : c.f ? c.f(d[c.k]) : (d[c.k] ?? '');
+
+async function carregarLista() {
+  $('resumo').textContent = 'Carregando…';
+  try {
+    const r = await fetch('/api/historico', {headers:{'Authorization':'Bearer ' + token}});
+    if (r.status === 401) { sair(); $('erro').textContent = 'Sessão expirada. Entre novamente.'; return; }
+    if (!r.ok) { $('resumo').textContent = 'Não foi possível carregar a lista.'; return; }
+    dados = await r.json();
+  } catch (e) { $('resumo').textContent = 'Erro de conexão.'; return; }
+  const atual = $('fq').value;
+  const quals = [...new Set(dados.map(d => d.qualidade).filter(Boolean))].sort();
+  $('fq').innerHTML = '<option value="">Todas as qualidades</option>' + quals.map(q => '<option>' + esc(q) + '</option>').join('');
+  $('fq').value = atual;
+  renderLista();
+}
+function filtrar() {
+  const termos = $('q').value.toLowerCase().split(/\s+/).filter(Boolean), fq = $('fq').value;
+  const l = dados.filter(d => {
+    if (fq && d.qualidade !== fq) return false;
+    const txt = COLS.map(c => celula(c, d) + (c.n ? ' ' + d[c.k] : '')).join(' ').toLowerCase();
+    return termos.every(t => txt.includes(t));
+  });
+  const {k, dir} = ordem;
+  l.sort((a, b) => (typeof a[k] === 'number' ? a[k] - b[k] : String(a[k]).localeCompare(String(b[k]), 'pt-BR', {numeric:true})) * dir);
+  return l;
+}
+function renderLista() {
+  $('cab').innerHTML = COLS.map(c => '<th data-k="' + c.k + '">' + c.t + (ordem.k === c.k ? (ordem.dir > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('');
+  const l = filtrar();
+  $('corpo').innerHTML = l.map(d => '<tr>' + COLS.map(c =>
+    '<td class="' + (c.n ? 'n ' : '') + (c.fin ? 'f' : '') + '">' + esc(celula(c, d)) + '</td>').join('') + '</tr>').join('');
+  const media = l.length ? l.reduce((s, d) => s + d.preco_final, 0) / l.length : 0;
+  $('resumo').textContent = l.length + ' de ' + dados.length + ' registros · preço final médio ' + brl(media);
+}
+function exportarCsv() {
+  const linhas = filtrar().map(d => COLS.map(c => c.n ? String(d[c.k]).replace('.', ',') : '"' + String(celula(c, d)).replace(/"/g, '""') + '"').join(';'));
+  const csv = [COLS.map(c => c.t).join(';'), ...linhas].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type:'text/csv'}));
+  a.download = 'lista-de-valores.csv'; a.click();
+}
+$('cab').onclick = e => { const k = e.target.dataset.k; if (!k) return; ordem = {k, dir: ordem.k === k ? -ordem.dir : 1}; renderLista(); };
+$('corpo').onclick = e => { const tr = e.target.closest('tr'); if (tr) tr.classList.toggle('sel'); };
+$('q').oninput = renderLista; $('fq').onchange = renderLista;
+
 mostrar();
 </script>
 </body>

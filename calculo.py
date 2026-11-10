@@ -71,6 +71,38 @@ def salvar(modelo, qualidade, r):
             con.close()
 
 
+def listar(limite=5000):
+    """Retorna os cálculos registrados (mais recentes primeiro)."""
+    cols = ("id", "criado_em", "modelo", "qualidade", "custo", "motoboy",
+            "mao_de_obra", "taxa_cartao_valor", "preco_final")
+    sql = "SELECT %s FROM calculos ORDER BY id DESC LIMIT %d" % (", ".join(cols), int(limite))
+    if DATABASE_URL:
+        import psycopg2
+        con = psycopg2.connect(DATABASE_URL)
+        try:
+            with con, con.cursor() as cur:
+                cur.execute(sql)
+                linhas = cur.fetchall()
+        finally:
+            con.close()
+    else:
+        if not os.path.exists(SQLITE_PATH):
+            return []
+        con = sqlite3.connect(SQLITE_PATH)
+        try:
+            linhas = con.execute(sql).fetchall()
+        finally:
+            con.close()
+    saida = []
+    for l in linhas:
+        d = dict(zip(cols, l))
+        d["criado_em"] = str(d["criado_em"])
+        for k in ("custo", "motoboy", "mao_de_obra", "taxa_cartao_valor", "preco_final"):
+            d[k] = float(d[k] or 0)
+        saida.append(d)
+    return saida
+
+
 def processar(dados):
     r = calcular(float(dados.get("custo", 0)), float(dados.get("motoboy", 0)),
                  float(dados.get("mao_de_obra", 0)))
