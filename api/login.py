@@ -12,13 +12,13 @@ class handler(BaseHTTPRequestHandler):
         tam = int(self.headers.get("Content-Length", 0))
         try:
             d = json.loads(self.rfile.read(tam) or b"{}")
-            token = login(str(d.get("email", "")), str(d.get("senha", "")))
+            token, erro = login(str(d.get("email", "")), str(d.get("senha", "")))
         except Exception:
-            token = None
+            token, erro = None, "Erro inesperado no servidor."
         if token:
             status, corpo = 200, {"token": token}
         else:
-            status, corpo = 401, {"erro": "Email ou senha incorretos."}
+            status, corpo = 401, {"erro": erro or "Email ou senha incorretos."}
         dados = json.dumps(corpo).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")

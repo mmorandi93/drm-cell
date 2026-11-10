@@ -33,16 +33,28 @@ def configurado():
     return bool(SUPABASE_URL and ANON_KEY and OWNER_EMAIL)
 
 
+def faltando():
+    nomes = {"SUPABASE_URL": SUPABASE_URL, "SUPABASE_ANON_KEY": ANON_KEY, "OWNER_EMAIL": OWNER_EMAIL}
+    return [n for n, v in nomes.items() if not v]
+
+
 def login(email, senha):
-    """Retorna o access_token se for o dono; senão None."""
-    if not configurado() or email.strip().lower() != OWNER_EMAIL:
-        return None
+    """Retorna (token, erro). token só existe se for o dono."""
+    f = faltando()
+    if f:
+        return None, "Login não configurado no servidor. Faltam variáveis: " + ", ".join(f)
+    if email.strip().lower() != OWNER_EMAIL:
+        return None, "Email ou senha incorretos."
     try:
         r = _chamar("/auth/v1/token?grant_type=password",
                     {"email": email.strip(), "password": senha})
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return None, "Email ou senha incorretos."
+        return None, "Erro no Supabase (código %s). Confira SUPABASE_URL e SUPABASE_ANON_KEY." % e.code
     except (urllib.error.URLError, ValueError):
-        return None
-    return r.get("access_token")
+        return None, "Não foi possível falar com o Supabase. Confira SUPABASE_URL."
+    return r.get("access_token"), None
 
 
 def token_valido(authorization_header):
