@@ -44,10 +44,9 @@ async function entrar(ev) {
     if (!c.r.ok) { $('erro').textContent = (c.d && c.d.erro) || 'Não foi possível ativar o 2FA.'; return; }
     factorId = c.d.factor_id;
     // só aceita imagem SVG em data URI (nunca uma URL externa)
-    // O Supabase devolve o SVG sem codificação ("data:image/svg+xml;utf-8,<svg...>"), que o navegador não renderiza.
-    const m = /^data:image\/svg\+xml;utf-8,([\s\S]+)$/.exec(c.d.qr || '');
-    $('qr').src = m ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(m[1])
-      : (/^data:image\/svg\+xml/.test(c.d.qr || '') ? c.d.qr : '');
+    // O servidor entrega o SVG limpo; aqui só o codificamos para virar uma imagem.
+    $('qr').src = c.d.qr_svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(c.d.qr_svg) : '';
+    $('qr').style.display = c.d.qr_svg ? 'block' : 'none';   // sem QR, a chave de texto abaixo continua valendo
     $('segredo').textContent = c.d.segredo || '';
     etapa = 'cadastro'; mostrar(); $('codigo2').focus();
   } catch (e) { $('erro').textContent = 'Erro de conexão. Tente de novo.'; }

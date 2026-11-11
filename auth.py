@@ -153,7 +153,27 @@ def mfa_cadastrar(token):
     r = _chamar("/auth/v1/factors",
                 {"factor_type": "totp", "friendly_name": "DRM-%d" % int(time.time())}, token=token)
     t = r.get("totp") or {}
-    return {"factor_id": r.get("id"), "qr": t.get("qr_code"), "segredo": t.get("secret")}
+    return {"factor_id": r.get("id"), "qr_svg": _svg(t.get("qr_code")), "segredo": t.get("secret"),
+            "uri": t.get("uri")}
+
+
+def _svg(qr):
+    """Extrai o texto do SVG do QR code, qualquer que seja a codificação enviada pelo Supabase."""
+    import binascii
+    from urllib.parse import unquote
+    qr = (qr or "").strip()
+    if qr.startswith("data:") and "," in qr:
+        cabecalho, carga = qr.split(",", 1)
+        try:
+            qr = base64.b64decode(carga).decode("utf-8") if "base64" in cabecalho else unquote(carga)
+        except (binascii.Error, ValueError):
+            return ""
+    qr = qr.strip()
+    if len(qr) > 200000 or not (qr.startswith("<svg") or qr.startswith("<?xml")):
+        return ""
+    if re.search(r"<script|on\w+\s*=|javascript:|<foreignObject", qr, re.I):   # SVG só com desenho
+        return ""
+    return qr
 
 
 def mfa_verificar(token, factor_id, codigo):

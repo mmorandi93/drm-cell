@@ -128,6 +128,24 @@ class AutenticacaoEAcesso(unittest.TestCase):
         s, _, _ = chamar("mfa", corpo={"acao": "verificar", "factor_id": fid, "codigo": "abc"}, token=t, ip=ip)
         self.assertEqual(s, 400)
 
+    def test_qr_code_entregue_como_svg_limpo(self):
+        fake_supabase.estado["fatores"].clear()      # força o fluxo de primeiro cadastro
+        _, d, _ = chamar("login", corpo={"email": "dono@teste.com", "senha": "SenhaForte#1"})
+        self.assertEqual(d["proximo"], "cadastrar")
+        c = chamar("mfa", corpo={"acao": "cadastrar"}, token=d["token"])[1]
+        self.assertTrue(c["qr_svg"].startswith("<svg"))
+        self.assertIn("#000", c["qr_svg"])
+
+    def test_extracao_de_svg_em_varios_formatos(self):
+        import base64 as b
+        svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#000"/></svg>'
+        for formato in ("data:image/svg+xml;utf-8," + svg, "data:image/svg+xml;utf8," + svg,
+                        "data:image/svg+xml;charset=utf-8," + __import__("urllib.parse").parse.quote(svg),
+                        "data:image/svg+xml;base64," + b.b64encode(svg.encode()).decode(), svg):
+            self.assertEqual(auth._svg(formato), svg, formato)
+        self.assertEqual(auth._svg("data:image/svg+xml,<svg><script>alert(1)</script></svg>"), "")
+        self.assertEqual(auth._svg("https://evil.example/qr.svg"), "")
+
     def test_perfis(self):
         leitor = login_completo("leitor@teste.com", "SenhaLeitor#1")
         self.assertEqual(chamar("historico", "GET", token=leitor)[0], 200)

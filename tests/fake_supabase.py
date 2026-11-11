@@ -57,7 +57,7 @@ class Fake(BaseHTTPRequestHandler):
         if self.path == "/auth/v1/factors":
             fid = str(uuid.uuid4())
             estado["fatores"][fid] = (s["email"], "unverified")
-            return self._json(200, {"id": fid, "totp": {"qr_code": "data:image/svg+xml;utf-8,<svg/>", "secret": "ABCDEF"}})
+            return self._json(200, {"id": fid, "totp": {"qr_code": "data:image/svg+xml;utf-8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect fill=\"#000\" width=\"5\" height=\"5\"/></svg>", "secret": "ABCDEF"}})
         if self.path.endswith("/challenge"):
             ch = str(uuid.uuid4())
             estado["desafios"][ch] = True
