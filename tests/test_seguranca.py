@@ -32,8 +32,9 @@ BANCO = os.path.join(tempfile.mkdtemp(), "teste.db")
 
 import auth  # noqa: E402
 import calculo  # noqa: E402
+import ordens  # noqa: E402
 import seguranca  # noqa: E402
-seguranca.SQLITE_PATH = calculo.SQLITE_PATH = BANCO
+seguranca.SQLITE_PATH = calculo.SQLITE_PATH = ordens.SQLITE_PATH = BANCO
 
 
 def carregar(nome):
@@ -49,7 +50,7 @@ def servir(modulo):
     return srv.server_address[1]
 
 
-ROTAS = {n: servir(carregar(n)) for n in ("login", "logout", "calcular", "historico")}
+ROTAS = {n: servir(carregar(n)) for n in ("login", "logout", "calcular", "historico", "ordens")}
 _ip = itertools.count(1)
 
 
@@ -256,6 +257,49 @@ class ConfiguracaoEstatica(unittest.TestCase):
         gi = open(os.path.join(RAIZ, ".gitignore")).read()
         for item in (".env", "calculos.db", ".vercel", "backups"):
             self.assertIn(item, gi)
+
+
+class OrdensDeServico(unittest.TestCase):
+    OS = {"cliente_nome": "Maria", "marca": "Samsung", "modelo": "A32", "defeito": "Tela quebrada",
+          "valor_pecas": 150, "valor_servico": 80.5, "desconto": 10}
+
+    def test_exige_login_e_perfil_dono(self):
+        self.assertEqual(chamar("ordens", "GET")[0], 401)
+        leitor = login_completo("leitor@teste.com", "SenhaLeitor#1")
+        self.assertEqual(chamar("ordens", "GET", token=leitor)[0], 403)
+        self.assertEqual(chamar("ordens", "POST", self.OS, token=leitor)[0], 403)
+
+    def test_criar_editar_e_historico(self):
+        t = login_completo()
+        s, d, _ = chamar("ordens", "POST", self.OS, token=t)
+        self.assertEqual(s, 200)
+        con = http.client.HTTPConnection("127.0.0.1", ROTAS["ordens"], timeout=10)
+        def req(metodo, corpo=None):
+            h = {"Authorization": "Bearer " + t, "Content-Type": "application/json", "x-forwarded-for": "10.7.7.%d" % next(_ip)}
+            con.request(metodo, "/api/ordens?id=%d" % d["id"], body=json.dumps(corpo) if corpo is not None else None, headers=h)
+            r = con.getresponse(); return r.status, json.loads(r.read())
+        s, o = req("GET")
+        self.assertEqual((s, o["total"], o["status"]), (200, 220.5, "Aberta"))
+        s, _ = req("PUT", {"status": "Pronto", "pago": True, "desconto": 20})
+        self.assertEqual(s, 200)
+        s, o = req("GET")
+        self.assertEqual((o["total"], o["status"], o["pago"]), (210.5, "Pronto", True))
+        self.assertTrue(any("Pronto" in h["texto"] for h in o["historico"]))
+        s, lista, _ = chamar("ordens", "GET", token=t)
+        self.assertTrue(any(x["id"] == d["id"] for x in lista["ordens"]))
+
+    def test_entradas_invalidas(self):
+        t = login_completo()
+        for corpo in ({}, {"cliente_nome": "A", "valor_pecas": "10"}, {"cliente_nome": "A", "valor_pecas": -1},
+                      {"cliente_nome": "A", "status": "Inventado"}, {"cliente_nome": "A", "forma_pagto": "Fiado"}):
+            self.assertEqual(chamar("ordens", "POST", corpo, token=t)[0], 400, corpo)
+
+    def test_xss_vira_texto(self):
+        t = login_completo()
+        s, d, _ = chamar("ordens", "POST", {"cliente_nome": "<script>x</script>"}, token=t)
+        self.assertEqual(s, 200)
+        _, lista, _ = chamar("ordens", "GET", token=t)
+        self.assertNotIn("<", [x for x in lista["ordens"] if x["id"] == d["id"]][0]["cliente_nome"])
 
 
 if __name__ == "__main__":

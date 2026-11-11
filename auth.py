@@ -23,7 +23,7 @@ LEITORES = _lista("VIEWER_EMAILS")
 
 # perfil -> permissões
 PERMISSOES = {
-    "dono": ("calcular", "historico"),
+    "dono": ("calcular", "historico", "os"),
     "leitura": ("historico",),
 }
 

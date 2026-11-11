@@ -4,13 +4,15 @@ let token = null;
 try { token = sessionStorage.getItem('drm_token'); } catch (e) {}
 
 let tela = 'menu';
-function ir(t) { tela = t; mostrar(); if (t === 'lista') carregarLista(); }
+function ir(t) { tela = t; mostrar(); if (t === 'lista') carregarLista(); if (t === 'os') carregarOS(); }
 function mostrar() {
   $('login').style.display = !token ? 'block' : 'none';
   $('menu').style.display = token && tela === 'menu' ? 'block' : 'none';
   $('app').style.display = token && tela === 'calc' ? 'block' : 'none';
   $('lista').style.display = token && tela === 'lista' ? 'block' : 'none';
-  document.querySelector('.card').classList.toggle('larga', tela === 'lista' && !!token);
+  $('os').style.display = token && tela === 'os' ? 'block' : 'none';
+  $('osform').style.display = token && tela === 'osform' ? 'block' : 'none';
+  document.querySelector('.card').classList.toggle('larga', ['lista', 'os', 'osform'].includes(tela) && !!token);
 }
 async function api(caminho, opcoes = {}, tk) {
   const h = {'Content-Type':'application/json'};
@@ -125,12 +127,111 @@ $('cab').onclick = e => { const k = e.target.dataset.k; if (!k) return; ordem = 
 $('corpo').onclick = e => { const tr = e.target.closest('tr'); if (tr) tr.classList.toggle('sel'); };
 $('q').oninput = renderLista; $('fq').onchange = renderLista;
 
+/* ---- Ordens de serviço ---- */
+const TEXTOS_OS = ['cliente_nome','cliente_tel','cliente_doc','marca','modelo','cor','imei','senha_aparelho',
+  'acessorios','estado_aparelho','defeito','laudo','tecnico','previsao','observacao','forma_pagto','status'];
+const NUMS_OS = ['valor_pecas','valor_servico','desconto'];
+let ordens = [], statusOS = [], filtroOS = '', osAtual = null;
+const dataBR = v => { const d = new Date(String(v).replace(' ','T') + (/[zZ+]/.test(String(v).slice(10)) ? '' : 'Z')); return isNaN(d) ? v : d.toLocaleDateString('pt-BR'); };
+const dataHoraBR = v => { const d = new Date(String(v).replace(' ','T') + (/[zZ+]/.test(String(v).slice(10)) ? '' : 'Z')); return isNaN(d) ? v : d.toLocaleString('pt-BR'); };
+const valorOS = id => parseFloat($(id).value) || 0;
+
+async function chamarOS(caminho, metodo, corpo) {
+  const {r, d} = await api(caminho, {method: metodo, body: corpo ? JSON.stringify(corpo) : undefined}, token);
+  if (r.status === 401) { sair('Sessão expirada. Entre novamente.'); return null; }
+  if (!r.ok) throw new Error((d && d.erro) || 'Não foi possível concluir.');
+  return d;
+}
+async function carregarOS() {
+  $('osresumo').textContent = 'Carregando…';
+  try {
+    const d = await chamarOS('/api/ordens', 'GET');
+    if (!d) return;
+    ordens = d.ordens; statusOS = d.status;
+    if (!$('f_status').options.length) statusOS.forEach(s => $('f_status').add(new Option(s, s)));
+    renderOS();
+  } catch (e) { $('osresumo').textContent = 'Não foi possível carregar as ordens.'; }
+}
+function renderOS() {
+  const abertas = ordens.filter(o => !['Entregue', 'Cancelada'].includes(o.status));
+  const receber = ordens.filter(o => o.status !== 'Cancelada' && !o.pago).reduce((s, o) => s + o.total, 0);
+  const mes = new Date().toISOString().slice(0, 7);
+  const recebido = ordens.filter(o => o.pago && o.atualizado_em.startsWith(mes)).reduce((s, o) => s + o.total, 0);
+  $('oskpis').innerHTML = [['Em aberto', abertas.length], ['Prontas p/ retirar', ordens.filter(o => o.status === 'Pronto').length],
+    ['A receber', brl(receber)], ['Recebido no mês', brl(recebido)]].map(([t, v]) => '<div class="kpi">' + t + '<b>' + esc(v) + '</b></div>').join('');
+  $('oschips').innerHTML = ['', ...statusOS].map(s => '<button type="button" data-fos="' + esc(s) + '" class="' + (filtroOS === s ? 'on' : '') + '">' +
+    esc(s || 'Todas') + ' (' + (s ? ordens.filter(o => o.status === s).length : ordens.length) + ')</button>').join('');
+  const q = $('osq').value.toLowerCase();
+  const l = ordens.filter(o => (!filtroOS || o.status === filtroOS) &&
+    (!q || [o.id, o.cliente_nome, o.cliente_tel, o.marca, o.modelo, o.imei, o.defeito].join(' ').toLowerCase().includes(q)));
+  $('oscorpo').innerHTML = l.map(o => '<tr data-os="' + o.id + '"><td>#' + o.id + '</td><td>' + esc(dataBR(o.criado_em)) + '</td><td>' + esc(o.cliente_nome) +
+    '</td><td>' + esc(o.cliente_tel) + '</td><td>' + esc((o.marca + ' ' + o.modelo).trim()) + '</td><td>' + esc(o.defeito.slice(0, 40)) +
+    '</td><td><span class="tag ' + (['Pronto', 'Entregue'].includes(o.status) ? 'ok' : o.status === 'Cancelada' ? 'cancelada' : '') + '">' + esc(o.status) +
+    '</span></td><td class="n">' + brl(o.total) + '</td><td>' + (o.pago ? 'Sim' : '<span class="pend">Não</span>') + '</td></tr>').join('') ||
+    '<tr><td colspan="9">Nenhuma OS encontrada</td></tr>';
+  $('osresumo').textContent = l.length + ' de ' + ordens.length + ' ordens';
+}
+function calcTotalOS() { $('f_total').value = brl(Math.max(valorOS('f_valor_pecas') + valorOS('f_valor_servico') - valorOS('f_desconto'), 0)); }
+async function abrirOS(id) {
+  $('oserro').textContent = ''; $('oshist').innerHTML = ''; osAtual = null;
+  for (const c of [...TEXTOS_OS, ...NUMS_OS]) $('f_' + c).value = '';
+  $('f_garantia_dias').value = 90; $('f_pago').checked = false;
+  NUMS_OS.forEach(c => $('f_' + c).value = 0); $('f_status').value = 'Aberta';
+  if (id) {
+    try {
+      const d = await chamarOS('/api/ordens?id=' + id, 'GET');
+      if (!d) return;
+      osAtual = d;
+      for (const c of [...TEXTOS_OS, ...NUMS_OS, 'garantia_dias']) $('f_' + c).value = d[c];
+      $('f_pago').checked = d.pago;
+      $('oshist').innerHTML = d.historico.map(h => '<li>' + esc(dataHoraBR(h.criado_em)) + ' — ' + esc(h.texto) + '</li>').join('');
+    } catch (e) { alert(e.message); return; }
+  }
+  $('ostitulo').textContent = id ? 'OS #' + id : 'Nova OS';
+  $('osimprimir').style.display = id ? '' : 'none';
+  calcTotalOS(); tela = 'osform'; mostrar();
+}
+async function salvarOS(ev) {
+  ev.preventDefault(); $('oserro').textContent = '';
+  const corpo = {pago: $('f_pago').checked, garantia_dias: parseInt($('f_garantia_dias').value, 10) || 0};
+  TEXTOS_OS.forEach(c => corpo[c] = $('f_' + c).value);
+  NUMS_OS.forEach(c => corpo[c] = valorOS('f_' + c));
+  try {
+    const d = await chamarOS(osAtual ? '/api/ordens?id=' + osAtual.id : '/api/ordens', osAtual ? 'PUT' : 'POST', corpo);
+    if (d) ir('os');
+  } catch (e) { $('oserro').textContent = e.message; }
+}
+function imprimirOS() {
+  const o = osAtual; if (!o) return;
+  const lin = (t, v) => '<tr><th>' + t + '</th><td>' + (esc(v) || '&nbsp;') + '</td></tr>';
+  $('impressao').innerHTML = '<h2>DRM Cell — Ordem de Serviço #' + o.id + '</h2><p>Entrada: ' + esc(dataBR(o.criado_em)) + ' · Status: ' + esc(o.status) + '</p><table>' +
+    lin('Cliente', o.cliente_nome) + lin('Telefone', o.cliente_tel) + lin('Aparelho', (o.marca + ' ' + o.modelo + ' ' + o.cor).trim()) +
+    lin('IMEI / Série', o.imei) + lin('Acessórios', o.acessorios) + lin('Estado do aparelho', o.estado_aparelho) +
+    lin('Defeito relatado', o.defeito) + lin('Serviço realizado', o.laudo) + lin('Peças', brl(o.valor_pecas)) +
+    lin('Mão de obra', brl(o.valor_servico)) + lin('Desconto', brl(o.desconto)) + lin('Total', brl(o.total)) +
+    lin('Garantia', o.garantia_dias + ' dias') + lin('Previsão', o.previsao) + '</table><p>______________________________ Assinatura do cliente</p>';
+  window.print();
+}
+function exportarOS() {
+  const cols = ['id', 'criado_em', 'cliente_nome', 'cliente_tel', 'marca', 'modelo', 'imei', 'defeito', 'status', 'total', 'pago'];
+  const csv = [cols.join(';'), ...ordens.map(o => cols.map(c => '"' + csvSeguro(c === 'total' ? String(o[c]).replace('.', ',') : o[c]).replace(/"/g, '""') + '"').join(';'))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type:'text/csv'}));
+  a.download = 'ordens-de-servico.csv'; a.click();
+}
+$('osq').oninput = renderOS;
+$('osform').addEventListener('submit', salvarOS);
+$('osform').addEventListener('input', calcTotalOS);
+$('oscorpo').onclick = e => { const tr = e.target.closest('tr[data-os]'); if (tr) abrirOS(tr.dataset.os); };
+$('oschips').onclick = e => { const b = e.target.closest('[data-fos]'); if (b) { filtroOS = b.dataset.fos; renderOS(); } };
+
 // ---- eventos (sem handlers inline, para a CSP bloquear scripts injetados) ----
 $('login').addEventListener('submit', entrar);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-ir],[data-acao]');
   if (!el) return;
   if (el.dataset.ir) return ir(el.dataset.ir);
-  ({sair: () => sair(), csv: exportarCsv, atualizar: carregarLista, calcular})[el.dataset.acao]();
+  ({sair: () => sair(), csv: exportarCsv, atualizar: carregarLista, calcular,
+    osnova: () => abrirOS(null), osatualizar: carregarOS, oscsv: exportarOS, osimprimir: imprimirOS})[el.dataset.acao]();
 });
 mostrar();

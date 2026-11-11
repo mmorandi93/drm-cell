@@ -34,3 +34,29 @@
   .total { display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding:16px; border-radius:12px; background:var(--bg); }
   .total strong { font-size:1.6rem; color:var(--ok); }
   code { word-break:break-all; font-size:.85rem; }
+  #os, #osform { display:none; }
+  h2 { font-size:.95rem; margin:20px 0 0; color:var(--mut); border-bottom:1px solid var(--bd); padding-bottom:4px; }
+  .grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:0 12px; }
+  .grade .larga { grid-column:1 / -1; }
+  textarea { width:100%; min-height:64px; padding:12px; font:inherit; font-size:1rem; border:1px solid var(--bd); border-radius:10px; background:var(--bg); color:var(--txt); resize:vertical; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:34px; }
+  .check input { width:auto; }
+  .check label { margin:0; font-size:1rem; color:var(--txt); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-top:6px; }
+  .kpi { background:var(--bg); border:1px solid var(--bd); border-radius:10px; padding:10px; font-size:.8rem; color:var(--mut); }
+  .kpi b { display:block; font-size:1.1rem; color:var(--txt); margin-top:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .chips button { width:auto; margin:0; padding:6px 12px; font-size:.82rem; font-weight:500; border-radius:999px; background:transparent; color:var(--txt); border:1px solid var(--bd); }
+  .chips button.on { background:var(--pri); color:#fff; border-color:var(--pri); }
+  #oscorpo tr { cursor:pointer; }
+  #oscorpo tr:hover { background:color-mix(in srgb, var(--pri) 14%, transparent); }
+  .tag { padding:2px 9px; border-radius:999px; font-size:.78rem; font-weight:600; border:1px solid var(--bd); }
+  .tag.ok { color:var(--ok); }
+  .tag.cancelada, .pend { color:var(--err); font-weight:600; }
+  .hist { font-size:.82rem; color:var(--mut); max-height:110px; overflow:auto; padding-left:18px; margin:14px 0 0; }
+  #impressao { display:none; }
+  @media print {
+    body > *:not(#impressao) { display:none !important; }
+    #impressao { display:block; color:#000; background:#fff; font:13px sans-serif; }
+    #impressao table { min-width:0; width:100%; } #impressao th, #impressao td { white-space:normal; border:1px solid #999; text-align:left; padding:6px; }
+  }

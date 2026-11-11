@@ -28,8 +28,76 @@
     <p class="sub">O que você quer abrir?</p>
     <button class="opcao" data-ir="calc">Abrir calculadora<small>Calcular o preço final de um reparo</small></button>
     <button class="opcao" data-ir="lista">Abrir lista de valores<small>Tabela com todos os cálculos já feitos</small></button>
+    <button class="opcao" data-ir="os">Ordens de serviço<small>Abrir, acompanhar e entregar os consertos</small></button>
     <button class="sec" data-acao="sair">Sair</button>
   </div>
+
+  <!-- ORDENS DE SERVIÇO: LISTA -->
+  <div id="os">
+    <h1>Ordens de serviço</h1>
+    <p class="sub">Clique em uma OS para ver, editar ou mudar o status.</p>
+    <div class="kpis" id="oskpis"></div>
+    <div class="chips" id="oschips"></div>
+    <div class="barra">
+      <input id="osq" type="search" placeholder="Pesquisar nº, cliente, telefone, aparelho, IMEI…">
+      <button data-acao="osnova">+ Nova OS</button>
+      <button data-acao="oscsv">Exportar CSV</button>
+      <button data-acao="osatualizar">Atualizar</button>
+    </div>
+    <div class="resumo" id="osresumo"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>Nº</th><th>Entrada</th><th>Cliente</th><th>Telefone</th><th>Aparelho</th><th>Defeito</th><th>Status</th><th>Total</th><th>Pago</th></tr></thead>
+      <tbody id="oscorpo"></tbody>
+    </table></div>
+    <button class="sec" data-ir="menu">← Voltar ao menu</button>
+  </div>
+
+  <!-- ORDEM DE SERVIÇO: FICHA -->
+  <form id="osform">
+    <h1 id="ostitulo">Nova OS</h1>
+    <p class="sub">Preencha os dados do cliente, do aparelho e do serviço.</p>
+    <h2>Cliente</h2>
+    <div class="grade">
+      <div><label for="f_cliente_nome">Nome *</label><input id="f_cliente_nome" maxlength="100" required></div>
+      <div><label for="f_cliente_tel">Telefone / WhatsApp</label><input id="f_cliente_tel" maxlength="30" inputmode="tel"></div>
+      <div><label for="f_cliente_doc">CPF / CNPJ</label><input id="f_cliente_doc" maxlength="30"></div>
+    </div>
+    <h2>Aparelho</h2>
+    <div class="grade">
+      <div><label for="f_marca">Marca</label><input id="f_marca" maxlength="60"></div>
+      <div><label for="f_modelo">Modelo</label><input id="f_modelo" maxlength="60"></div>
+      <div><label for="f_cor">Cor</label><input id="f_cor" maxlength="40"></div>
+      <div><label for="f_imei">IMEI / Nº de série</label><input id="f_imei" maxlength="40"></div>
+      <div><label for="f_senha_aparelho">Senha / padrão</label><input id="f_senha_aparelho" maxlength="60"></div>
+      <div><label for="f_acessorios">Acessórios deixados</label><input id="f_acessorios" maxlength="200" placeholder="capa, chip, carregador…"></div>
+      <div class="larga"><label for="f_estado_aparelho">Estado do aparelho (riscos, trincas, molhado…)</label><input id="f_estado_aparelho" maxlength="200"></div>
+    </div>
+    <h2>Serviço</h2>
+    <div class="grade">
+      <div class="larga"><label for="f_defeito">Defeito relatado</label><textarea id="f_defeito" maxlength="400"></textarea></div>
+      <div class="larga"><label for="f_laudo">Laudo / serviço realizado</label><textarea id="f_laudo" maxlength="400"></textarea></div>
+      <div><label for="f_tecnico">Técnico</label><input id="f_tecnico" maxlength="60"></div>
+      <div><label for="f_previsao">Previsão de entrega</label><input id="f_previsao" type="date"></div>
+      <div><label for="f_garantia_dias">Garantia (dias)</label><input id="f_garantia_dias" type="number" min="0" max="3650" value="90"></div>
+      <div><label for="f_status">Status</label><select id="f_status"></select></div>
+    </div>
+    <h2>Valores</h2>
+    <div class="grade">
+      <div><label for="f_valor_pecas">Peças (R$)</label><input id="f_valor_pecas" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div>
+      <div><label for="f_valor_servico">Mão de obra (R$)</label><input id="f_valor_servico" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div>
+      <div><label for="f_desconto">Desconto (R$)</label><input id="f_desconto" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div>
+      <div><label for="f_total">Total</label><input id="f_total" readonly></div>
+      <div><label for="f_forma_pagto">Forma de pagamento</label>
+        <select id="f_forma_pagto"><option value=""></option><option>Dinheiro</option><option>Pix</option><option>Débito</option><option>Crédito</option></select></div>
+      <div class="check"><input id="f_pago" type="checkbox"><label for="f_pago">Pago</label></div>
+      <div class="larga"><label for="f_observacao">Observação interna</label><textarea id="f_observacao" maxlength="300"></textarea></div>
+    </div>
+    <ul class="hist" id="oshist"></ul>
+    <button type="submit">Salvar OS</button>
+    <button type="button" class="sec" data-acao="osimprimir" id="osimprimir">Imprimir OS</button>
+    <button type="button" class="sec" data-ir="os">← Voltar às ordens</button>
+    <div class="erro" id="oserro"></div>
+  </form>
 
   <!-- LISTA DE VALORES -->
   <div id="lista">
@@ -85,6 +153,7 @@
   </div>
 </div>
 
+<div id="impressao"></div>
 <script src="app.js"></script>
 </body>
 </html>
