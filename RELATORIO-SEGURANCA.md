@@ -9,7 +9,7 @@ corrigido, como foi testado e o que ainda depende de você.
 | # | Achado | Gravidade |
 |---|--------|-----------|
 | A1 | Login sem limite de tentativas (força bruta) | Alta |
-| A2 | Sem 2FA: só e-mail + senha protegiam o histórico de preços | Alta |
+| A2 | Sem 2FA: só e-mail + senha protegiam o histórico de preços | Alta (**decisão do dono: 2FA não será usado**) |
 | A3 | Sem cabeçalhos de segurança nem CSP; JS e CSS embutidos na página | Média |
 | A4 | Entradas sem validação no servidor: aceitava negativos, `NaN`, `Infinity`, textos de qualquer tamanho; corpo sem limite | Média |
 | A5 | Mensagens de erro do login revelavam configuração ("Faltam variáveis…", código do Supabase) | Média |
@@ -28,8 +28,8 @@ nenhum segredo no código ou no histórico do git (verificado com busca), RLS li
 
 | Requisito | O que foi feito | Onde |
 |-----------|-----------------|------|
-| 1. Rotas privadas | Toda rota `/api/calcular` e `/api/historico` exige token válido **e** 2FA concluído, verificado no servidor | `seguranca.py` (`exigir`), `auth.py` |
-| 2. Autenticação + 2FA | Senha → código TOTP (app autenticador) via Supabase MFA. Primeiro acesso mostra QR code para cadastrar. Token só vale após o 2º fator (`aal2`) | `auth.py`, `api/mfa.py`, `calculadora/app.js` |
+| 1. Rotas privadas | Toda rota `/api/calcular` e `/api/historico` exige token válido, verificado no servidor | `seguranca.py` (`exigir`), `auth.py` |
+| 2. Autenticação | E-mail + senha via Supabase; token validado no servidor a cada requisição. **2FA removido a pedido do dono** (era a única barreira extra contra senha vazada) | `auth.py`, `api/login.py` |
 | 3. Hash de senha | Senhas ficam no Supabase Auth (bcrypt). O projeto não guarda nem registra senhas | — |
 | 4. Perfis | `dono` (calcula e vê histórico) e `leitura` (só histórico, via `VIEWER_EMAILS`) | `auth.py` (`PERMISSOES`) |
 | 5. Banco | RLS ligado em `calculos` e `eventos_seguranca` (a chave pública do Supabase não lê as tabelas); logs apagados após 90 dias | `calculo.py`, `seguranca.py` |
@@ -48,11 +48,9 @@ Funcionalidades existentes mantidas: calculadora, lista de valores, ordenar/filt
 
 ## 3. Evidências dos testes
 
-`python -m unittest discover -s tests` → **25 testes, todos passando** (Supabase simulado + SQLite temporário). Cobrem:
+`python -m unittest discover -s tests` → **22 testes, todos passando** (Supabase simulado + SQLite temporário). Cobrem:
 
 - Sem token / token inválido / token forjado com aal2 falso → **401**.
-- Só senha (sem 2FA) → **401** nas rotas de dados; com 2FA → **200**.
-- Código 2FA errado → 401; mal formado → 400; 5 erros → **429**.
 - 5 senhas erradas → 6ª tentativa **429**, mesmo com a senha certa; outro IP não é afetado.
 - Mensagem idêntica para e-mail inexistente e senha errada; sem a palavra "Supabase" na resposta.
 - Perfil `leitura` vê histórico (200) e é barrado em calcular (**403**).
@@ -81,10 +79,9 @@ Backup: `python backup.py testar` → original `{calculos: 3}`, restaurado `{cal
 
 ## 5. Riscos que continuam e o que fazer
 
-1. **Não testado em produção.** O 2FA e o login foram testados contra um Supabase simulado; falta um teste real com a sua conta.
-   Ao entrar pela primeira vez, **cadastre o app autenticador imediatamente**: até lá, quem souber a senha poderia cadastrar o 2FA dele.
+1. **Sem 2FA**: quem descobrir a senha entra. Use senha longa e única e mantenha o limite de tentativas (5/15 min). Dá para reativar o 2FA pelo histórico do git (commit anterior).
 2. **Variáveis na Vercel** (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OWNER_EMAIL`, `DATABASE_URL`, e recomendado `LOG_SALT`) ainda precisam estar configuradas.
-3. **No Supabase**: desative "Allow new users to sign up" (senão qualquer pessoa cria conta; o código só libera os e-mails permitidos, mas é melhor fechar a porta) e ative MFA/TOTP em Authentication.
+3. **No Supabase**: desative "Allow new users to sign up" (senão qualquer pessoa cria conta; o código só libera os e-mails permitidos, mas é melhor fechar a porta) e 
 4. **Rate limit de API é por instância** (memória). Em picos de ataque distribuído ele é parcial. O limite de login/2FA usa o banco e é consistente.
 5. **Vercel Authentication** do projeto `drm-cell` está ligada: o site hoje exige login da Vercel. Desligue para o site ficar público.
 6. **GitHub Pages não aplica `vercel.json`**: no endereço `github.io` os cabeçalhos e a API não existem. Use a Vercel como endereço oficial e, se quiser, desative o Pages.

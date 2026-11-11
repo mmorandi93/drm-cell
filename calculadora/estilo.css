@@ -33,7 +33,4 @@
   .linha { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--bd); font-size:.95rem; }
   .total { display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding:16px; border-radius:12px; background:var(--bg); }
   .total strong { font-size:1.6rem; color:var(--ok); }
-  #login, #mfa, #cadastro { display:block; }
-  #mfa, #cadastro { display:none; }
-  #qr { display:block; margin:12px auto; width:200px; height:200px; background:#fff; border-radius:10px; padding:6px; }
   code { word-break:break-all; font-size:.85rem; }

@@ -1,15 +1,12 @@
 const brl = v => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
 const $ = id => document.getElementById(id);
-// Só o token FINAL (após 2FA) é guardado; o intermediário fica apenas em memória.
-let token = null, tokenParcial = null, factorId = null;
+let token = null;
 try { token = sessionStorage.getItem('drm_token'); } catch (e) {}
 
-let tela = 'menu', etapa = 'login';   // etapa: login | mfa | cadastro
+let tela = 'menu';
 function ir(t) { tela = t; mostrar(); if (t === 'lista') carregarLista(); }
 function mostrar() {
-  $('login').style.display = !token && etapa === 'login' ? 'block' : 'none';
-  $('mfa').style.display = !token && etapa === 'mfa' ? 'block' : 'none';
-  $('cadastro').style.display = !token && etapa === 'cadastro' ? 'block' : 'none';
+  $('login').style.display = !token ? 'block' : 'none';
   $('menu').style.display = token && tela === 'menu' ? 'block' : 'none';
   $('app').style.display = token && tela === 'calc' ? 'block' : 'none';
   $('lista').style.display = token && tela === 'lista' ? 'block' : 'none';
@@ -24,9 +21,9 @@ async function api(caminho, opcoes = {}, tk) {
   return {r, d};
 }
 function finalizar(t) {
-  token = t; tokenParcial = null; factorId = null; etapa = 'login'; tela = 'menu';
+  token = t; tela = 'menu';
   try { sessionStorage.setItem('drm_token', token); } catch (e) {}
-  ['senha', 'codigo', 'codigo2'].forEach(id => $(id).value = '');
+  $('senha').value = '';
   mostrar();
 }
 async function entrar(ev) {
@@ -36,35 +33,12 @@ async function entrar(ev) {
     const {r, d} = await api('/api/login', {method:'POST',
       body: JSON.stringify({email: $('email').value, senha: $('senha').value})});
     if (!r.ok) { $('erro').textContent = (d && d.erro) || 'Não foi possível entrar.'; return; }
-    $('senha').value = '';
-    if (d.proximo === 'ok') return finalizar(d.token);
-    tokenParcial = d.token; factorId = d.factor_id;
-    if (d.proximo === 'verificar') { etapa = 'mfa'; mostrar(); $('codigo').focus(); return; }
-    const c = await api('/api/mfa', {method:'POST', body: JSON.stringify({acao:'cadastrar'})}, tokenParcial);
-    if (!c.r.ok) { $('erro').textContent = (c.d && c.d.erro) || 'Não foi possível ativar o 2FA.'; return; }
-    factorId = c.d.factor_id;
-    // só aceita imagem SVG em data URI (nunca uma URL externa)
-    // O servidor entrega o SVG limpo; aqui só o codificamos para virar uma imagem.
-    $('qr').src = c.d.qr_svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(c.d.qr_svg) : '';
-    $('qr').style.display = c.d.qr_svg ? 'block' : 'none';   // sem QR, a chave de texto abaixo continua valendo
-    $('segredo').textContent = c.d.segredo || '';
-    etapa = 'cadastro'; mostrar(); $('codigo2').focus();
+    finalizar(d.token);
   } catch (e) { $('erro').textContent = 'Erro de conexão. Tente de novo.'; }
 }
-async function verificar(ev, campo, saida) {
-  ev.preventDefault();
-  $(saida).textContent = '';
-  try {
-    const {r, d} = await api('/api/mfa', {method:'POST',
-      body: JSON.stringify({acao:'verificar', factor_id: factorId, codigo: $(campo).value.trim()})}, tokenParcial);
-    if (!r.ok) { $(saida).textContent = (d && d.erro) || 'Não foi possível verificar.'; return; }
-    finalizar(d.token);
-  } catch (e) { $(saida).textContent = 'Erro de conexão. Tente de novo.'; }
-}
 function sair(msg) {
-  const t = token || tokenParcial;
-  if (t) api('/api/logout', {method:'POST', body:'{}'}, t).catch(() => {});  // revoga a sessão no servidor
-  token = tokenParcial = factorId = null; etapa = 'login'; tela = 'menu';
+  if (token) api('/api/logout', {method:'POST', body:'{}'}, token).catch(() => {});  // revoga a sessão no servidor
+  token = null; tela = 'menu';
   try { sessionStorage.removeItem('drm_token'); } catch (e) {}
   $('res').style.display = 'none';
   mostrar();
@@ -153,8 +127,6 @@ $('q').oninput = renderLista; $('fq').onchange = renderLista;
 
 // ---- eventos (sem handlers inline, para a CSP bloquear scripts injetados) ----
 $('login').addEventListener('submit', entrar);
-$('mfa').addEventListener('submit', e => verificar(e, 'codigo', 'erro2'));
-$('cadastro').addEventListener('submit', e => verificar(e, 'codigo2', 'erro3'));
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-ir],[data-acao]');
   if (!el) return;

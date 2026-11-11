@@ -25,9 +25,9 @@ class handler(BaseAPI):
         email, senha = d.get("email"), d.get("senha")
         if not isinstance(email, str) or not isinstance(senha, str) or len(email) > 254:
             raise ValueError("credenciais")
-        token, proximo, factor_id = auth.login(email, senha)
+        token = auth.login(email, senha)
         if not token:
             log_evento("login_falha", iph)
             return self.enviar(401, {"erro": "Email ou senha incorretos."})
         log_evento("login_senha_ok", iph)
-        self.enviar(200, {"token": token, "proximo": proximo, "factor_id": factor_id})
+        self.enviar(200, {"token": token})

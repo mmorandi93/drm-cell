@@ -30,7 +30,6 @@ RETENCAO_DIAS = 90            # logs de segurança são apagados depois disso (L
 # limites: tipo de falha -> (máximo de falhas, janela em segundos)
 LIMITES = {
     "login_falha": (5, 900),
-    "mfa_falha": (5, 900),
 }
 LIMITE_REQ = (60, 60)         # 60 requisições por minuto por IP nas rotas privadas
 
@@ -242,7 +241,7 @@ class BaseAPI(BaseHTTPRequestHandler):
         h = self.headers.get("Authorization") or ""
         return h.split(" ", 1)[1] if h.lower().startswith("bearer ") else ""
 
-    def exigir(self, permissao=None, mfa=True):
+    def exigir(self, permissao=None):
         """Valida o token e a permissão. Retorna o usuário ou None (já respondeu)."""
         import auth
         iph = self.ip()
@@ -254,9 +253,9 @@ class BaseAPI(BaseHTTPRequestHandler):
             log_evento("config_ausente", iph, ",".join(auth.faltando()))
             self.enviar(503, {"erro": "Serviço indisponível."})
             return None
-        usuario = auth.token_valido(self.headers.get("Authorization"), exigir_mfa=mfa)
+        usuario = auth.token_valido(self.headers.get("Authorization"))
         if not usuario:
-            log_evento("acesso_negado", iph, "token ausente, inválido ou sem 2FA")
+            log_evento("acesso_negado", iph, "token ausente ou inválido")
             self.enviar(401, {"erro": "Não autorizado"})
             return None
         if permissao and permissao not in auth.PERMISSOES.get(usuario["perfil"], ()):

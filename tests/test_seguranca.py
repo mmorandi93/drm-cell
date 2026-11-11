@@ -49,7 +49,7 @@ def servir(modulo):
     return srv.server_address[1]
 
 
-ROTAS = {n: servir(carregar(n)) for n in ("login", "mfa", "logout", "calcular", "historico")}
+ROTAS = {n: servir(carregar(n)) for n in ("login", "logout", "calcular", "historico")}
 _ip = itertools.count(1)
 
 
@@ -77,22 +77,7 @@ def login_completo(email="dono@teste.com", senha="SenhaForte#1", ip=None):
     ip = ip or "10.9.9.%d" % next(_ip)
     s, d, _ = chamar("login", corpo={"email": email, "senha": senha}, ip=ip)
     assert s == 200, (s, d)
-    t = d["token"]
-    if d["proximo"] == "cadastrar":
-        fid = chamar("mfa", corpo={"acao": "cadastrar"}, token=t, ip=ip)[1]["factor_id"]
-    else:
-        fid = d["factor_id"]
-    s, d2, _ = chamar("mfa", corpo={"acao": "verificar", "factor_id": fid, "codigo": "123456"}, token=t, ip=ip)
-    assert s == 200, (s, d2)
-    return d2["token"]
-
-
-def parcial(ip):
-    """Login só com senha (aal1). Retorna (token, factor_id)."""
-    _, d, _ = chamar("login", corpo={"email": "dono@teste.com", "senha": "SenhaForte#1"}, ip=ip)
-    t = d["token"]
-    fid = d["factor_id"] or chamar("mfa", corpo={"acao": "cadastrar"}, token=t, ip=ip)[1]["factor_id"]
-    return t, fid
+    return d["token"]
 
 
 class AutenticacaoEAcesso(unittest.TestCase):
@@ -104,14 +89,7 @@ class AutenticacaoEAcesso(unittest.TestCase):
         self.assertEqual(chamar("historico", "GET", token="lixo")[0], 401)
         self.assertEqual(chamar("historico", "GET", token=fake_supabase.jwt("aal2"))[0], 401)
 
-    def test_senha_sem_2fa_nao_acessa_dados(self):
-        s, d, _ = chamar("login", corpo={"email": "dono@teste.com", "senha": "SenhaForte#1"})
-        self.assertEqual(s, 200)
-        self.assertIn(d["proximo"], ("cadastrar", "verificar"))
-        self.assertEqual(chamar("historico", "GET", token=d["token"])[0], 401)
-        self.assertEqual(chamar("calcular", corpo={"custo": 1}, token=d["token"])[0], 401)
-
-    def test_login_ok_com_2fa_acessa(self):
+    def test_login_ok_acessa(self):
         t = login_completo()
         s, _, h = chamar("historico", "GET", token=t)
         self.assertEqual(s, 200)
@@ -119,32 +97,6 @@ class AutenticacaoEAcesso(unittest.TestCase):
         self.assertEqual(h["x-content-type-options"], "nosniff")
         corpo = {"custo": 100, "motoboy": 10, "mao_de_obra": 50, "qualidade": "OLED"}
         self.assertEqual(chamar("calcular", corpo=corpo, token=t)[0], 200)
-
-    def test_codigo_2fa_errado_ou_mal_formado(self):
-        ip = "10.1.1.1"
-        t, fid = parcial(ip)
-        s, _, _ = chamar("mfa", corpo={"acao": "verificar", "factor_id": fid, "codigo": "000000"}, token=t, ip=ip)
-        self.assertEqual(s, 401)
-        s, _, _ = chamar("mfa", corpo={"acao": "verificar", "factor_id": fid, "codigo": "abc"}, token=t, ip=ip)
-        self.assertEqual(s, 400)
-
-    def test_qr_code_entregue_como_svg_limpo(self):
-        fake_supabase.estado["fatores"].clear()      # força o fluxo de primeiro cadastro
-        _, d, _ = chamar("login", corpo={"email": "dono@teste.com", "senha": "SenhaForte#1"})
-        self.assertEqual(d["proximo"], "cadastrar")
-        c = chamar("mfa", corpo={"acao": "cadastrar"}, token=d["token"])[1]
-        self.assertTrue(c["qr_svg"].startswith("<svg"))
-        self.assertIn("#000", c["qr_svg"])
-
-    def test_extracao_de_svg_em_varios_formatos(self):
-        import base64 as b
-        svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#000"/></svg>'
-        for formato in ("data:image/svg+xml;utf-8," + svg, "data:image/svg+xml;utf8," + svg,
-                        "data:image/svg+xml;charset=utf-8," + __import__("urllib.parse").parse.quote(svg),
-                        "data:image/svg+xml;base64," + b.b64encode(svg.encode()).decode(), svg):
-            self.assertEqual(auth._svg(formato), svg, formato)
-        self.assertEqual(auth._svg("data:image/svg+xml,<svg><script>alert(1)</script></svg>"), "")
-        self.assertEqual(auth._svg("https://evil.example/qr.svg"), "")
 
     def test_perfis(self):
         leitor = login_completo("leitor@teste.com", "SenhaLeitor#1")
@@ -175,14 +127,6 @@ class ForcaBrutaERateLimit(unittest.TestCase):
         b = chamar("login", corpo={"email": "outro@teste.com", "senha": "x"})
         self.assertEqual((a[0], a[1]), (b[0], b[1]))
         self.assertNotIn("supabase", json.dumps(a[1]).lower())
-
-    def test_mfa_bloqueia_apos_5_falhas(self):
-        ip = "10.3.3.3"
-        t, fid = parcial(ip)
-        r = [chamar("mfa", corpo={"acao": "verificar", "factor_id": fid, "codigo": "11111%d" % i},
-                    token=t, ip=ip)[0] for i in range(6)]
-        self.assertEqual(r[:5], [401] * 5)
-        self.assertEqual(r[5], 429)
 
     def test_rate_limit_geral_da_api(self):
         t = login_completo()

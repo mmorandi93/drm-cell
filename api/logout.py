@@ -16,7 +16,7 @@ class handler(BaseAPI):
     def _logout(self):
         if not self.origem_ok():
             raise PermissionError("origem")
-        if self.exigir(mfa=False):
+        if self.exigir():
             auth.logout(self.token_bruto())
             log_evento("logout", self.ip())
             self.enviar(200, {"ok": True})
