@@ -171,31 +171,31 @@ function renderOS() {
     '<tr><td colspan="9">Nenhuma OS encontrada</td></tr>';
   $('osresumo').textContent = l.length + ' de ' + ordens.length + ' ordens';
 }
-function calcTotalOS() { $('f_total').value = brl(Math.max(valorOS('f_valor_pecas') + valorOS('f_valor_servico') - valorOS('f_desconto'), 0)); }
 async function abrirOS(id) {
   $('oserro').textContent = ''; $('oshist').innerHTML = ''; osAtual = null;
-  for (const c of [...TEXTOS_OS, ...NUMS_OS]) $('f_' + c).value = '';
+  for (const c of TEXTOS_OS) $('f_' + c).value = '';
   $('f_garantia_dias').value = 90; $('f_pago').checked = false;
-  NUMS_OS.forEach(c => $('f_' + c).value = 0); $('f_status').value = 'Aberta';
+  $('f_total').value = 0; $('f_status').value = 'Aberta';
   if (id) {
     try {
       const d = await chamarOS('/api/ordens?id=' + id, 'GET');
       if (!d) return;
       osAtual = d;
-      for (const c of [...TEXTOS_OS, ...NUMS_OS, 'garantia_dias']) $('f_' + c).value = d[c];
+      for (const c of [...TEXTOS_OS, 'garantia_dias', 'total']) $('f_' + c).value = d[c];
       $('f_pago').checked = d.pago;
       $('oshist').innerHTML = d.historico.map(h => '<li>' + esc(dataHoraBR(h.criado_em)) + ' — ' + esc(h.texto) + '</li>').join('');
     } catch (e) { alert(e.message); return; }
   }
   $('ostitulo').textContent = id ? 'OS #' + id : 'Nova OS';
   $('osimprimir').style.display = id ? '' : 'none';
-  calcTotalOS(); tela = 'osform'; mostrar();
+  tela = 'osform'; mostrar();
 }
 async function salvarOS(ev) {
   ev.preventDefault(); $('oserro').textContent = '';
   const corpo = {pago: $('f_pago').checked, garantia_dias: parseInt($('f_garantia_dias').value, 10) || 0};
   TEXTOS_OS.forEach(c => corpo[c] = $('f_' + c).value);
-  NUMS_OS.forEach(c => corpo[c] = valorOS('f_' + c));
+  // só o valor final: ele vira o total da OS (peças e desconto ficam zerados)
+  Object.assign(corpo, {valor_pecas: 0, desconto: 0, valor_servico: valorOS('f_total')});
   try {
     const d = await chamarOS(osAtual ? '/api/ordens?id=' + osAtual.id : '/api/ordens', osAtual ? 'PUT' : 'POST', corpo);
     if (d) ir('os');
@@ -207,8 +207,7 @@ function imprimirOS() {
   $('impressao').innerHTML = '<h2>DRM Cell — Ordem de Serviço #' + o.id + '</h2><p>Entrada: ' + esc(dataBR(o.criado_em)) + ' · Status: ' + esc(o.status) + '</p><table>' +
     lin('Cliente', o.cliente_nome) + lin('Telefone', o.cliente_tel) + lin('Aparelho', (o.marca + ' ' + o.modelo + ' ' + o.cor).trim()) +
     lin('IMEI / Série', o.imei) + lin('Acessórios', o.acessorios) + lin('Estado do aparelho', o.estado_aparelho) +
-    lin('Defeito relatado', o.defeito) + lin('Serviço realizado', o.laudo) + lin('Peças', brl(o.valor_pecas)) +
-    lin('Mão de obra', brl(o.valor_servico)) + lin('Desconto', brl(o.desconto)) + lin('Total', brl(o.total)) +
+    lin('Defeito relatado', o.defeito) + lin('Serviço realizado', o.laudo) + lin('Valor final', brl(o.total)) +
     lin('Garantia', o.garantia_dias + ' dias') + lin('Previsão', o.previsao) + '</table><p>______________________________ Assinatura do cliente</p>';
   window.print();
 }
@@ -221,7 +220,6 @@ function exportarOS() {
 }
 $('osq').oninput = renderOS;
 $('osform').addEventListener('submit', salvarOS);
-$('osform').addEventListener('input', calcTotalOS);
 $('oscorpo').onclick = e => { const tr = e.target.closest('tr[data-os]'); if (tr) abrirOS(tr.dataset.os); };
 $('oschips').onclick = e => { const b = e.target.closest('[data-fos]'); if (b) { filtroOS = b.dataset.fos; renderOS(); } };
 
